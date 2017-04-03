@@ -1,14 +1,12 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
 
 public class NarcissisticNumbersGenerator {
     private int power(int base, int exponent) {
-        int res = 1;
-        for (int i = 0; i < exponent; i++) {
-            res *= base;
-        }
-        return res;
+        return IntStream.range(0, exponent).reduce(1, (acc, i) -> acc * base);
     }
 
     private List<Integer> getDigits(int number) {
@@ -23,32 +21,41 @@ public class NarcissisticNumbersGenerator {
     }
 
     private boolean isNarcissisticNumber(int number) {
-        List<Integer> digits = getDigits(number);
-        int sum = 0;
-        for (Integer i : digits) {
-            sum += power(i, digits.size());
-        }
+        final List<Integer> digits = getDigits(number);
+        final int sum = digits.stream().reduce(0, (acc, digit) -> acc + power(digit, digits.size()));
         return sum == number;
     }
 
-    public void printNarcissisticNumbers(int intervalStart, int intervalEnd, int step) {
+    public List<Integer> getNarcissisticNumbers(int intervalStart, int intervalEnd, int step) {
+        List<Integer> narcissisticNumbers = new ArrayList<>();
         for (int i = intervalStart; i < intervalEnd; i += step) {
             if (isNarcissisticNumber(i)) {
-                System.out.println(i);
+                narcissisticNumbers.add(i);
             }
         }
+        return narcissisticNumbers;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         Scanner in = new Scanner(System.in);
         int intervalStart = in.nextInt();
         int intervalEnd = in.nextInt();
         int threadCount = in.nextInt();
-
-        for (int i = 0; i < threadCount; i++) {
-            int finalI = i;
-            ((Runnable) () -> new NarcissisticNumbersGenerator()
-                    .printNarcissisticNumbers(intervalStart + finalI, intervalEnd, threadCount)).run();
-        }
+        Long nanoStart = System.nanoTime();
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        List<List<Integer>> lists = new ArrayList<>();
+        IntStream.range(0, threadCount).forEach((int i) -> {
+            Future<List<Integer>> list = executorService.submit((Callable<List<Integer>>) () -> new NarcissisticNumbersGenerator()
+                    .getNarcissisticNumbers(intervalStart + i, intervalEnd, threadCount));
+            try {
+                lists.add(list.get());
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        });
+        executorService.shutdown();
+        Long nanoEnd = System.nanoTime();
+        lists.forEach(l -> l.forEach(System.out::println));
+        System.out.println("Time: " + (nanoEnd - nanoStart) / 1000000);
     }
 }
